@@ -33,12 +33,12 @@ function action_read_from_user(cb) {
     ask_question('ESSID (str):'),
     ask_question('BSSID (mac):'),
   ], (err, results) => {
-    var [essid, bssid] = results;
+    let [essid, bssid] = results;
     bssid = bssid.toUpperCase().split('').filter((c) => /[0-9A-Z]/.test(c)).join('');
     if (bssid.length != 12) {
       return cb(new Error('Invalid BSSID'));
     }
-    var url = form_url(essid, bssid);
+    let url = form_url(essid, bssid);
     return cb(null, url);
   });
 }
@@ -56,28 +56,44 @@ function action_get_from_network(url, cb) {
 }
 
 const cheerio = require('cheerio')
-function action_print_result(response_body, cb) {
-  var doc = cheerio.load(response_body)
-  var result = doc(TARGET_SELECTOR).text();
+function action_find_result(response_body, cb) {
+  let doc = cheerio.load(response_body)
+  let result = doc(TARGET_SELECTOR).text();
   if (result === "")
     cb(new Error("Exploit not found"));
   else
     cb(null, result);
 }
 
-function dko() {
-  async.waterfall([
-    action_read_from_user,
-    action_get_from_network,
-    action_print_result
-  ], (err, result) => {
-    if (err)
-      console.log(`Error: [${err.message}]`);
-    else
-      console.log(`Success: [${result}]`);
-    console.log();
-    setImmediate(dko);
-  });
+module.exports = {
+  query(essid, bssid, cb) {
+   async.waterfall([
+      (cb) => cb(null, form_url(essid, bssid)),
+      action_get_from_network,
+      action_find_result
+    ], (err, result) => {
+      if (err)
+        return cb(err);
+      else
+        cb(null, result);
+    }); 
+  }
 }
 
-dko();
+if (require.main === module) {
+  function manual_mode() {
+    async.waterfall([
+      action_read_from_user,
+      action_get_from_network,
+      action_find_result
+    ], (err, result) => {
+      if (err)
+        console.log(`Error: [${err.message}]`);
+      else
+        console.log(`Success: [${result}]`);
+      console.log();
+      setImmediate(manual_mode);
+    });
+  }
+  manual_mode();
+}
